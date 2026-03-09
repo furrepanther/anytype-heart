@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/anyproto/any-sync/accountservice"
 	"github.com/anyproto/any-sync/app"
@@ -22,6 +23,11 @@ import (
 const (
 	CName         = accountservice.CName
 	keyFileDevice = "device.key"
+
+	// Antigravity canonical install namespace (keeps Anytype local data isolated from other app installs).
+	agAnytypeCanonicalRelRoot = ".gemini/antigravity/integrations/anytype-heart/account_roots"
+	// Optional hard override for operators who need a different root without patching code.
+	agAnytypeRepoRootEnv = "ANTIGRAVITY_ANYTYPE_HEART_ROOT"
 )
 
 var log = logging.Logger("wallet")
@@ -37,9 +43,9 @@ type wallet struct {
 	lang          string
 	deviceKeyPath string
 
-	accountKey    crypto.PrivKey
-	deviceKey     crypto.PrivKey
-	masterKey     crypto.PrivKey
+	accountKey crypto.PrivKey
+	deviceKey  crypto.PrivKey
+	masterKey  crypto.PrivKey
 	// this key is used to sign ethereum transactions
 	// and use Any Naming Service
 	ethereumKey ecdsa.PrivateKey
@@ -180,15 +186,55 @@ func (r *wallet) Account() *accountdata.AccountKeys {
 	return r.accountData
 }
 
+func canonicalAnytypeRootPath() string {
+	if v := strings.TrimSpace(os.Getenv(agAnytypeRepoRootEnv)); v != "" {
+		return filepath.Clean(v)
+	}
+	home := strings.TrimSpace(os.Getenv("USERPROFILE"))
+	if home == "" {
+		home = strings.TrimSpace(os.Getenv("HOME"))
+	}
+	if home == "" {
+		home = "."
+	}
+	return filepath.Join(home, filepath.FromSlash(agAnytypeCanonicalRelRoot))
+}
+
+func shouldUseCanonicalRootPath(rootPath string) bool {
+	p := strings.TrimSpace(rootPath)
+	if p == "" {
+		return true
+	}
+	normalized := strings.ToLower(filepath.ToSlash(filepath.Clean(p)))
+	if strings.Contains(normalized, "/.gemini/antigravity/") {
+		return true
+	}
+	// Force Anytype into Antigravity's canonical namespace to avoid stomping unrelated installs.
+	return true
+}
+
+func resolveAnytypeRootPath(rootPath string) string {
+	if shouldUseCanonicalRootPath(rootPath) {
+		target := canonicalAnytypeRootPath()
+		if strings.TrimSpace(rootPath) != "" {
+			log.With("requestedRoot", rootPath).With("canonicalRoot", target).
+				Info("overriding anytype root path to antigravity canonical path")
+		}
+		return target
+	}
+	return filepath.Clean(rootPath)
+}
+
 func NewWithAccountRepo(rootPath string, derivationResult crypto.DerivationResult, lang string) Wallet {
+	rootPath = resolveAnytypeRootPath(rootPath)
 	accountId := derivationResult.Identity.GetPublic().Account()
 	repoPath := filepath.Join(rootPath, accountId)
 	return &wallet{
 		rootPath:      rootPath,
 		repoPath:      repoPath,
 		lang:          lang,
-		masterKey:  derivationResult.MasterKey,
-		accountKey: derivationResult.Identity,
+		masterKey:     derivationResult.MasterKey,
+		accountKey:    derivationResult.Identity,
 		deviceKeyPath: filepath.Join(repoPath, keyFileDevice),
 		ethereumKey:   derivationResult.EthereumIdentity,
 	}

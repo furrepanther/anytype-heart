@@ -1,0 +1,13 @@
+{
+  "generated_at_utc": "2026-02-22T21:46:00Z",
+  "scenario_pack_version": "decompiler-sidecar-v1",
+  "status": "success",
+  "tool_status": {
+    "uncompyle6_available": true,
+    "ilspy_cmd_available": false,
+    "ghidrecomp_repo_present": true,
+    "ghidrecomp_hint_present": true
+  },
+  "candidate_count": 0,
+  "artifact_dir": "/mnt/c/Users/furre/.gemini/antigravity/production/repo-intake-reports/20260222T213949Z/anytype-heart__20260222T130108Z.decompiler.decompiler-artifacts"
+}
